@@ -1,10 +1,11 @@
-use std::{
-    collections::HashMap,
-    io::{self, BufRead, BufReader, Read},
-    net::TcpStream,
-};
+use std::{collections::HashMap, string::FromUtf8Error};
 
+use async_trait::async_trait;
 use strum_macros::EnumString;
+use tokio::{
+    io::{AsyncBufReadExt, AsyncReadExt, BufReader, Error},
+    net::tcp::OwnedReadHalf,
+};
 
 macro_rules! define_status {
     ($($name:ident = ($code:expr, $desc:expr)),*) => {
@@ -109,6 +110,13 @@ define_status! {
     NetworkAuthenticationRequired = (511, "Network Authentication Required")
 }
 
+#[async_trait]
+pub trait AsyncTryFrom<T>: Sized {
+    type Error;
+
+    async fn try_from(value: T) -> Result<Self, Self::Error>;
+}
+
 const HTTP_VERSION: &str = "HTTP/1.1";
 
 #[derive(Default, Debug, Clone, Copy, EnumString)]
@@ -126,12 +134,8 @@ pub enum Method {
     Patch,
 }
 
-// TODO: Build a macro to setup Status codes
-// pub enum Status {
-//     OK = (200, "OK"),
-// }
-
 #[derive(Default, Debug)]
+#[allow(dead_code)]
 pub struct Request {
     method: Method,
     uri: String,
@@ -141,7 +145,7 @@ pub struct Request {
 }
 
 impl Request {
-    fn new(method: Method, uri: String, version: String) -> Self {
+    pub fn new(method: Method, uri: String, version: String) -> Self {
         Self {
             method,
             uri,
@@ -149,15 +153,21 @@ impl Request {
             ..Default::default()
         }
     }
+
+    pub fn body_string(&self) -> Result<String, FromUtf8Error> {
+        String::from_utf8(self.body.to_vec())
+    }
 }
 
-impl TryFrom<BufReader<TcpStream>> for Request {
-    type Error = io::Error;
+#[async_trait]
+impl AsyncTryFrom<BufReader<OwnedReadHalf>> for Request {
+    type Error = Error;
 
-    fn try_from(mut reader: BufReader<TcpStream>) -> Result<Self, Self::Error> {
-        let mut lines = reader.by_ref().lines();
+    async fn try_from(value: BufReader<OwnedReadHalf>) -> Result<Self, Self::Error> {
+        let reader = BufReader::new(value);
+        let mut lines = reader.lines();
 
-        let first_line = lines.next().unwrap().unwrap();
+        let first_line = lines.next_line().await.unwrap().unwrap();
         let mut parts = first_line.split_whitespace();
 
         let (verb, uri, protocol) = (
@@ -173,8 +183,7 @@ impl TryFrom<BufReader<TcpStream>> for Request {
 
         let mut request = Request::new(verb, uri, protocol);
 
-        for line in lines {
-            let line = line.unwrap();
+        while let Some(line) = lines.next_line().await? {
             if line.is_empty() {
                 break;
             }
@@ -188,7 +197,7 @@ impl TryFrom<BufReader<TcpStream>> for Request {
             let len = len.parse().unwrap_or(0usize);
             request.body.resize(len, 0);
 
-            reader.read_exact(&mut request.body)?;
+            lines.get_mut().read_exact(&mut request.body).await?;
         }
 
         Ok(request)
