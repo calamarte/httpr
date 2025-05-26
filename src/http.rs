@@ -1,10 +1,12 @@
-use std::{collections::HashMap, string::FromUtf8Error};
+use std::string::FromUtf8Error;
+use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
+use log::{debug, error, info};
 use strum_macros::EnumString;
 use tokio::{
-    io::{AsyncBufReadExt, AsyncReadExt, BufReader, Error},
-    net::tcp::OwnedReadHalf,
+    io::{self, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, Error},
+    net::{tcp::OwnedReadHalf, TcpListener},
 };
 
 macro_rules! define_status {
@@ -108,6 +110,11 @@ define_status! {
     LoopDetected = (508, "Loop Detected"),
     NotExtended = (510, "Not Extended"),
     NetworkAuthenticationRequired = (511, "Network Authentication Required")
+}
+
+#[async_trait]
+pub trait HttpHandler: Send + Sync {
+    async fn solve_request(&self, request: Request) -> Result<Response, &'static str>;
 }
 
 #[async_trait]
@@ -249,5 +256,39 @@ impl Response {
         bytes.extend_from_slice(&self.body);
 
         bytes
+    }
+}
+
+pub async fn run_server(bind: &str, handler: Arc<dyn HttpHandler>) -> io::Result<()> {
+    debug!("Running in a debug mode...");
+
+    info!("bind -> {bind}");
+
+    let listener = TcpListener::bind(bind).await?;
+    loop {
+        let (stream, socket) = listener.accept().await?;
+
+        debug!("Connection from: {}:{}", socket.ip(), socket.port());
+
+        let hand = handler.clone();
+        tokio::spawn(async move {
+            let (read_half, mut write_half) = stream.into_split();
+            let reader = BufReader::new(read_half);
+
+            let request = match AsyncTryFrom::try_from(reader).await {
+                Ok(req) => req,
+                Err(_) => {
+                    error!("Server can't build the request!");
+                    return;
+                }
+            };
+
+            debug!("Handling {request:?}");
+
+            match hand.solve_request(request).await {
+                Ok(r) => write_half.write_all(&r.as_bytes()).await.unwrap(),
+                Err(msg) => error!("{msg}"),
+            }
+        });
     }
 }
