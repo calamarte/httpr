@@ -8,6 +8,7 @@ use tokio::{
     io::{self, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, Error},
     net::{tcp::OwnedReadHalf, TcpListener},
 };
+use url::Url;
 
 macro_rules! define_status {
     ($($name:ident = ($code:expr, $desc:expr)),*) => {
@@ -164,6 +165,11 @@ impl Request {
     pub fn body_string(&self) -> Result<String, FromUtf8Error> {
         String::from_utf8(self.body.to_vec())
     }
+
+    pub fn url(&self) -> Url {
+        let host = self.headers.get("host").unwrap();
+        Url::parse(&format!("http://{host}{}", self.uri)).unwrap()
+    }
 }
 
 #[async_trait]
@@ -184,7 +190,7 @@ impl AsyncTryFrom<BufReader<OwnedReadHalf>> for Request {
                 .to_uppercase()
                 .parse::<Method>()
                 .expect("Not allowed method!"),
-            parts.next().expect("path").to_lowercase(),
+            parts.next().expect("path").to_string(),
             parts.next().expect("protocol").to_lowercase(),
         );
 

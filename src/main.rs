@@ -1,6 +1,9 @@
-use std::sync::Arc;
+use std::{env, sync::Arc};
 
-use httpr::{handlers::DummyHandler, http::run_server};
+use httpr::{
+    handlers::{DummyHandler, StaticFileHandler},
+    http::run_server,
+};
 
 #[tokio::main]
 async fn main() {
@@ -8,5 +11,10 @@ async fn main() {
     env_logger::init_from_env(log_env);
 
     const BIND: &str = "127.0.0.1:4444";
-    run_server(BIND, Arc::new(DummyHandler)).await.unwrap()
+    // run_server(BIND, Arc::new(DummyHandler)).await.unwrap()
+
+    let pwd = env::current_dir().unwrap();
+    run_server(BIND, Arc::new(StaticFileHandler::new(pwd).unwrap()))
+        .await
+        .unwrap()
 }
