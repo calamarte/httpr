@@ -2,8 +2,8 @@ use std::string::FromUtf8Error;
 use std::{collections::HashMap, sync::Arc};
 
 use async_trait::async_trait;
-use log::{debug, error, info};
-use strum_macros::EnumString;
+use log::{debug, error, info, log_enabled};
+use strum_macros::{Display, EnumString};
 use tokio::{
     io::{self, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, Error},
     net::{tcp::OwnedReadHalf, TcpListener},
@@ -127,7 +127,7 @@ pub trait AsyncTryFrom<T>: Sized {
 
 const HTTP_VERSION: &str = "HTTP/1.1";
 
-#[derive(Default, Debug, Clone, Copy, EnumString)]
+#[derive(Default, Debug, Clone, Copy, EnumString, Display)]
 #[strum(serialize_all = "UPPERCASE")]
 pub enum Method {
     #[default]
@@ -281,7 +281,7 @@ pub async fn run_server(bind: &str, handler: Arc<dyn HttpHandler>) -> io::Result
             let (read_half, mut write_half) = stream.into_split();
             let reader = BufReader::new(read_half);
 
-            let request = match AsyncTryFrom::try_from(reader).await {
+            let request: Request = match AsyncTryFrom::try_from(reader).await {
                 Ok(req) => req,
                 Err(_) => {
                     error!("Server can't build the request!");
@@ -289,7 +289,11 @@ pub async fn run_server(bind: &str, handler: Arc<dyn HttpHandler>) -> io::Result
                 }
             };
 
-            debug!("Handling {request:?}");
+            if !log_enabled!(log::Level::Debug) {
+                info!("Request -> [{}] {}", request.method, request.uri);
+            }
+
+            debug!("Request -> {request:?}");
 
             match hand.solve_request(request).await {
                 Ok(r) => write_half.write_all(&r.as_bytes()).await.unwrap(),
