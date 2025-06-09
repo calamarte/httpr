@@ -1,3 +1,4 @@
+use std::ops::ControlFlow;
 use std::string::FromUtf8Error;
 use std::{collections::HashMap, sync::Arc};
 
@@ -116,6 +117,16 @@ define_status! {
 #[async_trait]
 pub trait HttpHandler: Send + Sync {
     async fn solve_request(&self, request: Request) -> Result<Response, &'static str>;
+}
+
+#[async_trait]
+pub trait InterceptorReq: Send + Sync {
+    async fn chain_req(&self, request: Request) -> ControlFlow<Request, Response>;
+}
+
+#[async_trait]
+pub trait InterceptorRes: Send + Sync {
+    async fn chain_res(&self, request: Response) -> Response;
 }
 
 #[async_trait]
@@ -265,40 +276,68 @@ impl Response {
     }
 }
 
-pub async fn run_server(bind: &str, handler: Arc<dyn HttpHandler>) -> io::Result<()> {
-    debug!("Running in a debug mode...");
+pub struct Server {
+    bind: String,
+    handler: Arc<dyn HttpHandler>,
+    interceptors_req: Vec<Arc<dyn InterceptorReq>>,
+    interceptors_res: Vec<Arc<dyn InterceptorRes>>,
+}
 
-    info!("bind -> {bind}");
+impl Server {
+    pub fn new(bind: String, handler: Arc<dyn HttpHandler>) -> Self {
+        Self {
+            bind,
+            handler,
+            interceptors_req: Vec::new(),
+            interceptors_res: Vec::new(),
+        }
+    }
 
-    let listener = TcpListener::bind(bind).await?;
-    loop {
-        let (stream, socket) = listener.accept().await?;
+    pub fn push_req_inter(&mut self, req_inter: Arc<dyn InterceptorReq>) -> &mut Server {
+        self.interceptors_req.push(req_inter);
+        self
+    }
 
-        debug!("Connection from: {}:{}", socket.ip(), socket.port());
+    pub fn push_res_inter(&mut self, res_inter: Arc<dyn InterceptorRes>) -> &mut Server {
+        self.interceptors_res.push(res_inter);
+        self
+    }
 
-        let hand = handler.clone();
-        tokio::spawn(async move {
-            let (read_half, mut write_half) = stream.into_split();
-            let reader = BufReader::new(read_half);
+    pub async fn run(&self) -> io::Result<()> {
+        debug!("Running in a debug mode...");
 
-            let request: Request = match AsyncTryFrom::try_from(reader).await {
-                Ok(req) => req,
-                Err(_) => {
-                    error!("Server can't build the request!");
-                    return;
+        info!("bind -> {}", self.bind);
+
+        let listener = TcpListener::bind(&self.bind).await?;
+        loop {
+            let (stream, socket) = listener.accept().await?;
+
+            debug!("Connection from: {}:{}", socket.ip(), socket.port());
+
+            let hand = self.handler.clone();
+            tokio::spawn(async move {
+                let (read_half, mut write_half) = stream.into_split();
+                let reader = BufReader::new(read_half);
+
+                let request: Request = match AsyncTryFrom::try_from(reader).await {
+                    Ok(req) => req,
+                    Err(_) => {
+                        error!("Server can't build the request!");
+                        return;
+                    }
+                };
+
+                if !log_enabled!(log::Level::Debug) {
+                    info!("Request -> [{}] {}", request.method, request.uri);
                 }
-            };
 
-            if !log_enabled!(log::Level::Debug) {
-                info!("Request -> [{}] {}", request.method, request.uri);
-            }
+                debug!("Request -> {request:?}");
 
-            debug!("Request -> {request:?}");
-
-            match hand.solve_request(request).await {
-                Ok(r) => write_half.write_all(&r.as_bytes()).await.unwrap(),
-                Err(msg) => error!("{msg}"),
-            }
-        });
+                match hand.solve_request(request).await {
+                    Ok(r) => write_half.write_all(&r.as_bytes()).await.unwrap(),
+                    Err(msg) => error!("{msg}"),
+                }
+            });
+        }
     }
 }

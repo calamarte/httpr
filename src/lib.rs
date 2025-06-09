@@ -1,2 +1,2 @@
-pub mod handlers;
 pub mod http;
+pub mod static_server;

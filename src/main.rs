@@ -1,7 +1,7 @@
 use std::{env, path::PathBuf, sync::Arc};
 
 use clap::Parser;
-use httpr::{handlers::StaticFileHandler, http::run_server};
+use httpr::{http::Server, static_server::StaticFileHandler};
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -22,7 +22,7 @@ async fn main() {
 
     let working_dir = match working_dir {
         Some(p) => p,
-        None => env::current_dir().unwrap(),
+        None => env::current_dir().expect("Failed to get current directory"),
     };
 
     bind.push_str(&format!(":{port}"));
@@ -30,10 +30,6 @@ async fn main() {
     let log_env = env_logger::Env::default().default_filter_or("info");
     env_logger::init_from_env(log_env);
 
-    run_server(
-        &bind,
-        Arc::new(StaticFileHandler::new(working_dir).unwrap()),
-    )
-    .await
-    .unwrap()
+    let handler = Arc::new(StaticFileHandler::new(working_dir).expect("Failed creating handler"));
+    Server::new(bind, handler).run().await.unwrap()
 }
