@@ -33,7 +33,7 @@ async fn main() {
     let log_env = env_logger::Env::default().default_filter_or("info");
     env_logger::init_from_env(log_env);
 
-    let handler = Arc::new(StaticFileHandler::new(working_dir).expect("Failed creating handler"));
+    let handler = StaticFileHandler::new(working_dir).expect("Failed creating handler");
     Server::new(bind, handler)
         .push_req_inter(Arc::new(OnlyGetReqInterceptor))
         .push_res_inter(Arc::new(NoBodyOnHeadResInterceptor))

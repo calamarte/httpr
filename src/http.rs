@@ -124,7 +124,7 @@ pub trait Named {
 }
 
 #[async_trait]
-pub trait HttpHandler: Send + Sync + Named {
+pub trait HttpHandler: Send + Sync + Named + 'static {
     async fn solve_request(&self, request: &Request) -> Result<Response, &'static str>;
 }
 
@@ -311,29 +311,29 @@ impl Response {
     }
 }
 
-pub struct Server {
+pub struct Server<H> {
     bind: String,
-    handler: Arc<dyn HttpHandler>,
+    handler: Arc<H>,
     interceptors_req: Vec<Arc<dyn InterceptorReq>>,
     interceptors_res: Vec<Arc<dyn InterceptorRes>>,
 }
 
-impl Server {
-    pub fn new(bind: String, handler: Arc<dyn HttpHandler>) -> Self {
+impl<H: HttpHandler> Server<H> {
+    pub fn new(bind: String, handler: H) -> Self {
         Self {
             bind,
-            handler,
+            handler: Arc::new(handler),
             interceptors_req: Vec::new(),
             interceptors_res: Vec::new(),
         }
     }
 
-    pub fn push_req_inter(&mut self, req_inter: Arc<dyn InterceptorReq>) -> &mut Server {
+    pub fn push_req_inter(&mut self, req_inter: Arc<dyn InterceptorReq>) -> &mut Self {
         self.interceptors_req.push(req_inter);
         self
     }
 
-    pub fn push_res_inter(&mut self, res_inter: Arc<dyn InterceptorRes>) -> &mut Server {
+    pub fn push_res_inter(&mut self, res_inter: Arc<dyn InterceptorRes>) -> &mut Self {
         self.interceptors_res.push(res_inter);
         self
     }
@@ -405,7 +405,7 @@ impl Server {
     }
 }
 
-impl fmt::Debug for Server {
+impl<H: Named> fmt::Debug for Server<H> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let int_req = self
             .interceptors_req
