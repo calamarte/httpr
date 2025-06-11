@@ -2,6 +2,7 @@ use std::any::type_name;
 use std::collections::HashSet;
 use std::fmt;
 use std::ops::ControlFlow;
+use std::path::Path;
 use std::string::FromUtf8Error;
 use std::{collections::HashMap, sync::Arc};
 
@@ -255,6 +256,20 @@ impl Response {
             headers: HashMap::new(),
             body: Vec::new(),
         }
+    }
+
+    pub fn not_found() -> Self {
+        Self::new(HttpStatus::NotFound)
+    }
+
+    pub fn redirect<P: AsRef<Path>>(path: P) -> Self {
+        let mut response = Self::new(HttpStatus::MovedPermanently);
+        response.headers.insert(
+            "Location".to_string(),
+            path.as_ref().to_str().unwrap().to_string(),
+        );
+
+        response
     }
 
     pub fn allowed(methods: HashSet<Method>) -> Self {

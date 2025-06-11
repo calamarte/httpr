@@ -6,16 +6,20 @@ use std::{
 
 use async_trait::async_trait;
 use log::{debug, warn};
-use tokio::{
-    fs::{read_dir, File, ReadDir},
-    io::AsyncReadExt,
-};
+use tokio::{fs::File, io::AsyncReadExt};
 
 use crate::http::{
     HttpHandler, HttpStatus, InterceptorReq, InterceptorRes, Method, Named, Request, Response,
 };
 
+enum FileMatch {
+    File(File),
+    Redirect(PathBuf),
+    NotFound,
+}
+
 const ALLOWED_METHODS: [Method; 3] = [Method::Get, Method::Head, Method::Options];
+const INDEX_FILE_NAME: &str = "index.html";
 
 pub struct StaticFileHandler {
     root: PathBuf,
@@ -36,35 +40,26 @@ impl StaticFileHandler {
         Ok(StaticFileHandler { root })
     }
 
-    async fn match_file(&self, mut path: &Path) -> Option<File> {
+    async fn match_file(&self, mut path: &Path) -> FileMatch {
+        let request_path = path;
+
         if let Ok(p) = path.strip_prefix("/") {
             path = p;
         }
 
         let file_path = self.root.join(path);
-        if file_path.is_file() {
-            if !file_path.exists() {
-                return None;
-            }
-
-            return File::open(file_path).await.ok();
+        if !file_path.exists() {
+            return FileMatch::NotFound;
         }
 
         if file_path.is_dir() {
-            return StaticFileHandler::find_first_file(read_dir(file_path).await.ok()?).await;
+            let mut request_path = request_path.to_path_buf();
+            request_path.push(INDEX_FILE_NAME);
+
+            return FileMatch::Redirect(request_path);
         }
 
-        None
-    }
-
-    async fn find_first_file(mut entries: ReadDir) -> Option<File> {
-        while let Some(entry) = entries.next_entry().await.ok()? {
-            if entry.path().is_file() {
-                return File::open(entry.path()).await.ok();
-            }
-        }
-
-        None
+        FileMatch::File(File::open(&file_path).await.expect("File access"))
     }
 }
 
@@ -79,8 +74,9 @@ impl HttpHandler for StaticFileHandler {
         debug!("Reading {:?}", path);
 
         let mut file = match self.match_file(path).await {
-            Some(f) => f,
-            None => return Ok(Response::new(HttpStatus::NotFound)),
+            FileMatch::File(f) => f,
+            FileMatch::Redirect(p) => return Ok(Response::redirect(p)),
+            FileMatch::NotFound => return Ok(Response::not_found()),
         };
 
         let mut body = Vec::new();
