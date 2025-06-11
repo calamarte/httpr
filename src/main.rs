@@ -1,7 +1,10 @@
 use std::{env, path::PathBuf, sync::Arc};
 
 use clap::Parser;
-use httpr::{http::Server, static_server::StaticFileHandler};
+use httpr::{
+    http::Server,
+    static_server::{NoBodyOnHeadResInterceptor, OnlyGetReqInterceptor, StaticFileHandler},
+};
 
 #[derive(Debug, Parser)]
 struct Args {
@@ -31,5 +34,10 @@ async fn main() {
     env_logger::init_from_env(log_env);
 
     let handler = Arc::new(StaticFileHandler::new(working_dir).expect("Failed creating handler"));
-    Server::new(bind, handler).run().await.unwrap()
+    Server::new(bind, handler)
+        .push_req_inter(Arc::new(OnlyGetReqInterceptor))
+        .push_res_inter(Arc::new(NoBodyOnHeadResInterceptor))
+        .run()
+        .await
+        .unwrap()
 }

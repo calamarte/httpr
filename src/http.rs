@@ -1,3 +1,6 @@
+use std::any::type_name;
+use std::collections::HashSet;
+use std::fmt;
 use std::ops::ControlFlow;
 use std::string::FromUtf8Error;
 use std::{collections::HashMap, sync::Arc};
@@ -114,19 +117,25 @@ define_status! {
     NetworkAuthenticationRequired = (511, "Network Authentication Required")
 }
 
-#[async_trait]
-pub trait HttpHandler: Send + Sync {
-    async fn solve_request(&self, request: Request) -> Result<Response, &'static str>;
+pub trait Named {
+    fn name(&self) -> &str {
+        type_name::<Self>()
+    }
 }
 
 #[async_trait]
-pub trait InterceptorReq: Send + Sync {
-    async fn chain_req(&self, request: Request) -> ControlFlow<Request, Response>;
+pub trait HttpHandler: Send + Sync + Named {
+    async fn solve_request(&self, request: &Request) -> Result<Response, &'static str>;
 }
 
 #[async_trait]
-pub trait InterceptorRes: Send + Sync {
-    async fn chain_res(&self, request: Response) -> Response;
+pub trait InterceptorReq: Send + Sync + Named {
+    async fn chain_req(&self, request: Request) -> ControlFlow<Response, Request>;
+}
+
+#[async_trait]
+pub trait InterceptorRes: Send + Sync + Named {
+    async fn chain_res(&self, request: &Request, response: Response) -> Response;
 }
 
 #[async_trait]
@@ -138,7 +147,7 @@ pub trait AsyncTryFrom<T>: Sized {
 
 const HTTP_VERSION: &str = "HTTP/1.1";
 
-#[derive(Default, Debug, Clone, Copy, EnumString, Display)]
+#[derive(Default, Debug, Clone, Copy, EnumString, Display, Eq, PartialEq, Hash)]
 #[strum(serialize_all = "UPPERCASE")]
 pub enum Method {
     #[default]
@@ -171,6 +180,10 @@ impl Request {
             version,
             ..Default::default()
         }
+    }
+
+    pub fn method(&self) -> Method {
+        self.method
     }
 
     pub fn body_string(&self) -> Result<String, FromUtf8Error> {
@@ -228,6 +241,7 @@ impl AsyncTryFrom<BufReader<OwnedReadHalf>> for Request {
     }
 }
 
+#[derive(Debug)]
 pub struct Response {
     status: HttpStatus,
     headers: HashMap<String, String>,
@@ -243,12 +257,33 @@ impl Response {
         }
     }
 
+    pub fn allowed(methods: HashSet<Method>) -> Self {
+        let methods_string = methods
+            .into_iter()
+            .map(|m| m.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+
+        let mut headers = HashMap::with_capacity(1);
+        headers.insert("Allowed".to_string(), methods_string);
+
+        Self {
+            status: HttpStatus::NoContent,
+            headers,
+            body: Vec::new(),
+        }
+    }
+
     pub fn add_header(&mut self, (k, value): (&str, &str)) {
         self.headers.insert(k.to_lowercase(), value.to_string());
     }
 
     pub fn add_body(&mut self, body: &[u8]) {
         self.body = body.to_vec();
+    }
+
+    pub fn clean_body(&mut self) {
+        self.body.clear();
     }
 
     pub fn as_bytes(&self) -> Vec<u8> {
@@ -305,6 +340,7 @@ impl Server {
 
     pub async fn run(&self) -> io::Result<()> {
         debug!("Running in a debug mode...");
+        debug!("Server chain: {self:?}");
 
         info!("bind -> {}", self.bind);
 
@@ -314,12 +350,15 @@ impl Server {
 
             debug!("Connection from: {}:{}", socket.ip(), socket.port());
 
-            let hand = self.handler.clone();
+            let handler = self.handler.clone();
+            let interceptor_req = self.interceptors_req.clone();
+            let interceptor_res = self.interceptors_res.clone();
+
             tokio::spawn(async move {
                 let (read_half, mut write_half) = stream.into_split();
                 let reader = BufReader::new(read_half);
 
-                let request: Request = match AsyncTryFrom::try_from(reader).await {
+                let mut request: Request = match AsyncTryFrom::try_from(reader).await {
                     Ok(req) => req,
                     Err(_) => {
                         error!("Server can't build the request!");
@@ -333,11 +372,54 @@ impl Server {
 
                 debug!("Request -> {request:?}");
 
-                match hand.solve_request(request).await {
-                    Ok(r) => write_half.write_all(&r.as_bytes()).await.unwrap(),
-                    Err(msg) => error!("{msg}"),
+                // Run interceptors_req
+                for interceptor in &interceptor_req {
+                    match interceptor.chain_req(request).await {
+                        ControlFlow::Continue(r) => request = r,
+                        ControlFlow::Break(res) => {
+                            write_half.write_all(&res.as_bytes()).await.unwrap();
+                            return;
+                        }
+                    }
                 }
+
+                // Run handler
+                let mut response = match handler.solve_request(&request).await {
+                    Ok(res) => res,
+                    Err(msg) => {
+                        error!("{msg}");
+                        Response::new(HttpStatus::InternalServerError)
+                    }
+                };
+
+                // Run interceptors_req
+                for interceptor in &interceptor_res {
+                    response = interceptor.chain_res(&request, response).await;
+                }
+
+                debug!("Response -> {response:?}");
+
+                write_half.write_all(&response.as_bytes()).await.unwrap();
             });
         }
+    }
+}
+
+impl fmt::Debug for Server {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let int_req = self
+            .interceptors_req
+            .iter()
+            .map(|i| i.name())
+            .collect::<Vec<_>>()
+            .join(" -> ");
+        let int_res = self
+            .interceptors_req
+            .iter()
+            .map(|i| i.name())
+            .collect::<Vec<_>>()
+            .join(" -> ");
+
+        write!(f, "{int_req} -> [{}] -> {int_res}", self.handler.name())
     }
 }

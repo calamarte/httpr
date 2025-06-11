@@ -1,4 +1,8 @@
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashSet,
+    ops::ControlFlow,
+    path::{Path, PathBuf},
+};
 
 use async_trait::async_trait;
 use log::{debug, warn};
@@ -7,7 +11,11 @@ use tokio::{
     io::AsyncReadExt,
 };
 
-use crate::http::{HttpHandler, HttpStatus, Request, Response};
+use crate::http::{
+    HttpHandler, HttpStatus, InterceptorReq, InterceptorRes, Method, Named, Request, Response,
+};
+
+const ALLOWED_METHODS: [Method; 3] = [Method::Get, Method::Head, Method::Options];
 
 pub struct StaticFileHandler {
     root: PathBuf,
@@ -19,6 +27,10 @@ impl StaticFileHandler {
 
         if !root.exists() {
             return Err("Path doesn't exists in the system!");
+        }
+
+        if !root.is_dir() {
+            return Err("Path is not a directory!");
         }
 
         Ok(StaticFileHandler { root })
@@ -56,9 +68,11 @@ impl StaticFileHandler {
     }
 }
 
+impl Named for StaticFileHandler {}
+
 #[async_trait]
 impl HttpHandler for StaticFileHandler {
-    async fn solve_request(&self, request: Request) -> Result<Response, &'static str> {
+    async fn solve_request(&self, request: &Request) -> Result<Response, &'static str> {
         let url = request.url();
         let path = Path::new(url.path());
 
@@ -85,5 +99,37 @@ impl HttpHandler for StaticFileHandler {
         response.add_body(&body);
 
         Ok(response)
+    }
+}
+
+pub struct OnlyGetReqInterceptor;
+
+impl Named for OnlyGetReqInterceptor {}
+
+#[async_trait]
+impl InterceptorReq for OnlyGetReqInterceptor {
+    async fn chain_req(&self, request: Request) -> ControlFlow<Response, Request> {
+        match request.method() {
+            Method::Get | Method::Head => ControlFlow::Continue(request),
+            Method::Options => {
+                ControlFlow::Break(Response::allowed(HashSet::from(ALLOWED_METHODS)))
+            }
+            _ => ControlFlow::Break(Response::new(HttpStatus::MethodNotAllowed)),
+        }
+    }
+}
+
+pub struct NoBodyOnHeadResInterceptor;
+
+impl Named for NoBodyOnHeadResInterceptor {}
+
+#[async_trait]
+impl InterceptorRes for NoBodyOnHeadResInterceptor {
+    async fn chain_res(&self, request: &Request, mut response: Response) -> Response {
+        if request.method() == Method::Head {
+            response.clean_body();
+        }
+
+        response
     }
 }
