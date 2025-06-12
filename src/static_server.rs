@@ -8,8 +8,9 @@ use std::{
 
 use async_trait::async_trait;
 use handlebars::Handlebars;
-use log::{debug, warn};
+use log::{debug, info, warn};
 use once_cell::sync::Lazy;
+use rust_embed::RustEmbed;
 use serde::Serialize;
 use tokio::{
     fs::{read_dir, File},
@@ -32,6 +33,12 @@ const INDEX_FILE_NAME: &str = "index.html";
 
 const DIRECTORY_TEMPLATE: &str = "directory";
 const NOT_FOUND_TEMPLATE: &str = "not_found";
+
+const INTERNAL_ROOT: &str = "/__internal/";
+
+#[derive(RustEmbed)]
+#[folder = "assets/"]
+struct Assets;
 
 static HBS: Lazy<Arc<RwLock<Handlebars<'static>>>> = Lazy::new(|| {
     let mut hbs = Handlebars::new();
@@ -141,6 +148,29 @@ impl StaticFileHandler {
     async fn solve_browsable_request(&self, request: &Request) -> Result<Response, &'static str> {
         let url = request.url();
         let request_path = Path::new(url.path());
+
+        // Internal access
+        if request_path.starts_with(INTERNAL_ROOT) {
+            let internal_path = request_path.strip_prefix(INTERNAL_ROOT).unwrap();
+            info!("Internal {internal_path:?}");
+
+            if let Some(asset) = Assets::get(internal_path.to_str().unwrap()) {
+                let ext = internal_path
+                    .extension()
+                    .map(|ext| ext.to_str().unwrap())
+                    .unwrap();
+
+                let mime = mime_guess::from_ext(ext).first_or_text_plain().to_string();
+
+                let mut response = Response::new(HttpStatus::Ok);
+                response.add_header(("Content-Type", &mime));
+                response.add_body(&asset.data);
+
+                return Ok(response);
+            }
+
+            return Ok(Response::not_found());
+        }
 
         let path = if let Ok(p) = request_path.strip_prefix("/") {
             p
