@@ -59,6 +59,7 @@ static HBS: Lazy<Arc<RwLock<Handlebars<'static>>>> = Lazy::new(|| {
 
 #[derive(Serialize)]
 struct TemplateDirCtx<'a> {
+    internal: &'static str,
     is_root: bool,
     dir: Cow<'a, str>,
     files: Vec<TemplateEntryCtx<'a>>,
@@ -152,7 +153,6 @@ impl StaticFileHandler {
         // Internal access
         if request_path.starts_with(INTERNAL_ROOT) {
             let internal_path = request_path.strip_prefix(INTERNAL_ROOT).unwrap();
-            info!("Internal {internal_path:?}");
 
             if let Some(asset) = Assets::get(internal_path.to_str().unwrap()) {
                 let ext = internal_path
@@ -203,6 +203,7 @@ impl StaticFileHandler {
         }
 
         let context = TemplateDirCtx {
+            internal: INTERNAL_ROOT,
             is_root: request_path.to_str().unwrap().trim() == "/",
             dir: Cow::Borrowed(request_path.to_str().unwrap()),
             files,
