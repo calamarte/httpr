@@ -120,7 +120,7 @@ define_status! {
 
 pub trait Named {
     fn name(&self) -> &str {
-        type_name::<Self>()
+        type_name::<Self>().split("::").last().unwrap()
     }
 }
 
@@ -433,7 +433,7 @@ impl<H: Named> fmt::Debug for Server<H> {
             .collect::<Vec<_>>()
             .join(" -> ");
         let int_res = self
-            .interceptors_req
+            .interceptors_res
             .iter()
             .map(|i| i.name())
             .collect::<Vec<_>>()
