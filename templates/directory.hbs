@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{dir}}</title>
+    <!-- <link href="css/style.css" rel="stylesheet"> -->
+  </head>
+  <body>
+    <header>
+      <h1> Directory {{dir}}<h1>
+    </header>
+    <main>
+      <ul>
+        {{#unless is_root }}
+          <li><a href="..">D - ..</a></li>
+        {{/unless}}
+
+        {{#each files}}
+            <li>
+              <a href="{{this.file_name}}">
+                {{#if this.is_dir}}
+                    D -  
+                {{else}}
+                    F -  
+                {{/if}}
+                {{this.file_name}}
+              </a>
+
+            </li>
+        {{/each}}
+      </ul>
+    </main>
+  </body>
+</html>

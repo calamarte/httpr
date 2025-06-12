@@ -17,7 +17,7 @@ use url::Url;
 
 macro_rules! define_status {
     ($($name:ident = ($code:expr, $desc:expr)),*) => {
-        #[derive(Debug)]
+        #[derive(Debug, Clone, Copy, PartialEq)]
         pub enum HttpStatus {
             $(
                 $name,
@@ -287,6 +287,10 @@ impl Response {
             headers,
             body: Vec::new(),
         }
+    }
+
+    pub fn status(&self) -> HttpStatus {
+        self.status
     }
 
     pub fn add_header(&mut self, (k, value): (&str, &str)) {
