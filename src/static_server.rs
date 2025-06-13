@@ -1,3 +1,4 @@
+use core::str;
 use std::{
     borrow::Cow,
     collections::HashSet,
@@ -7,8 +8,10 @@ use std::{
 };
 
 use async_trait::async_trait;
-use handlebars::Handlebars;
-use log::{debug, warn};
+use handlebars::{
+    Context, Handlebars, Helper, HelperResult, JsonRender, Output, RenderContext, RenderErrorReason,
+};
+use log::{debug, info, warn};
 use once_cell::sync::Lazy;
 use rust_embed::RustEmbed;
 use serde::Serialize;
@@ -57,6 +60,34 @@ static HBS: Lazy<Handlebars<'static>> = Lazy::new(|| {
         include_str!("../templates/not_found.hbs"),
     )
     .unwrap();
+
+    hbs.register_helper(
+        "asset",
+        Box::new(
+            |h: &Helper,
+             _: &Handlebars,
+             _: &Context,
+             _: &mut RenderContext,
+             out: &mut dyn Output|
+             -> HelperResult {
+                let param = h
+                    .param(0)
+                    .ok_or(RenderErrorReason::ParamNotFoundForIndex("assets", 0))?;
+
+                if let Some(asset) = Assets::get(
+                    param
+                        .value()
+                        .as_str()
+                        .ok_or(RenderErrorReason::InvalidParamType("Invalid"))?,
+                ) {
+                    let data = str::from_utf8(&asset.data).unwrap();
+                    out.write(data)?;
+                }
+
+                Ok(())
+            },
+        ),
+    );
 
     hbs
 });

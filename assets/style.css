@@ -47,6 +47,6 @@ main {
   border: 1px solid var(--secondary-color);
   object-fit: cover;
   aspect-ratio: 1;
-  width: 10rem;
-  height: 10rem;
+  width: 100px;
+  height: 100px;
 }

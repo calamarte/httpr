@@ -16,19 +16,24 @@
     <main>
       <ul class="files">
         {{#unless is_root }}
-          <li><a href="..">D - ..</a></li>
+          <li class="file">
+            <a href="..">
+              {{ asset 'icons/opened_folder.svg' }}
+              <h2>..</h2>
+            </a>
+          </li>
         {{/unless}}
 
         {{#each files}}
             <li class="file">
               <a href="{{this.file_name}}">
                 {{#if this.is_dir }}
-                  <img src="https://picsum.photos/200"/>
+                    {{ asset 'icons/folder.svg' }}
                 {{else}}
                     {{#if this.file_type}}
                       <img src="{{this.file_type.icons.normal}}"/>
                     {{else}}
-                      <img src="https://picsum.photos/200"/>
+                      {{ asset 'icons/file.svg' }}
                     {{/if}}
                 {{/if}}
 
