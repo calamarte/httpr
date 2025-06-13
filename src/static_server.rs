@@ -100,11 +100,26 @@ struct TemplateDirCtx<'a> {
     files: Vec<TemplateEntryCtx<'a>>,
 }
 
-#[derive(Serialize)]
+#[derive(Eq, PartialEq, Serialize)]
 struct TemplateEntryCtx<'a> {
     is_dir: bool,
     file_name: Cow<'a, str>,
     file_type: Option<Value>,
+}
+
+impl<'a> Ord for TemplateEntryCtx<'a> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        other
+            .is_dir
+            .cmp(&self.is_dir)
+            .then(self.file_name.cmp(&other.file_name))
+    }
+}
+
+impl<'a> PartialOrd for TemplateEntryCtx<'a> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
 }
 
 pub struct StaticFileHandler {
@@ -243,6 +258,8 @@ impl StaticFileHandler {
 
             files.push(file);
         }
+
+        files.sort();
 
         let context = TemplateDirCtx {
             internal: INTERNAL_ROOT,
