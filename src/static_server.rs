@@ -4,14 +4,13 @@ use std::{
     collections::HashSet,
     ops::ControlFlow,
     path::{Path, PathBuf},
-    sync::Arc,
 };
 
 use async_trait::async_trait;
 use handlebars::{
-    Context, Handlebars, Helper, HelperResult, JsonRender, Output, RenderContext, RenderErrorReason,
+    Context, Handlebars, Helper, HelperResult, Output, RenderContext, RenderErrorReason,
 };
-use log::{debug, info, warn};
+use log::{debug, warn};
 use once_cell::sync::Lazy;
 use rust_embed::RustEmbed;
 use serde::Serialize;
@@ -19,7 +18,6 @@ use serde_json::Value;
 use tokio::{
     fs::{read_dir, File},
     io::AsyncReadExt,
-    sync::RwLock,
 };
 use utils::{mime_by_ext, mime_by_path, type_by_ext};
 
