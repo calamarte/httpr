@@ -44,7 +44,7 @@ const INTERNAL_ROOT: &str = "/__internal/";
 #[folder = "assets/"]
 struct Assets;
 
-static HBS: Lazy<Arc<RwLock<Handlebars<'static>>>> = Lazy::new(|| {
+static HBS: Lazy<Handlebars<'static>> = Lazy::new(|| {
     let mut hbs = Handlebars::new();
     hbs.register_template_string(
         DIRECTORY_TEMPLATE,
@@ -58,7 +58,7 @@ static HBS: Lazy<Arc<RwLock<Handlebars<'static>>>> = Lazy::new(|| {
     )
     .unwrap();
 
-    Arc::new(RwLock::new(hbs))
+    hbs
 });
 
 #[derive(Serialize)]
@@ -220,11 +220,7 @@ impl StaticFileHandler {
             files,
         };
 
-        let body = HBS
-            .read()
-            .await
-            .render(DIRECTORY_TEMPLATE, &context)
-            .unwrap();
+        let body = HBS.render(DIRECTORY_TEMPLATE, &context).unwrap();
 
         let mut response = Response::new(HttpStatus::Ok);
         response.add_header(("Content-Type", "text/html; charset=utf-8"));
@@ -287,13 +283,7 @@ impl Named for NotFoundRenderResInterceptor {}
 impl InterceptorRes for NotFoundRenderResInterceptor {
     async fn chain_res(&self, _: &Request, mut response: Response) -> Response {
         if response.status() == HttpStatus::NotFound {
-            response.add_body(
-                HBS.read()
-                    .await
-                    .render(NOT_FOUND_TEMPLATE, &())
-                    .unwrap()
-                    .as_bytes(),
-            );
+            response.add_body(HBS.render(NOT_FOUND_TEMPLATE, &()).unwrap().as_bytes());
         }
 
         response
