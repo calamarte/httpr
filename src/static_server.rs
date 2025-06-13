@@ -8,19 +8,23 @@ use std::{
 
 use async_trait::async_trait;
 use handlebars::Handlebars;
-use log::{debug, info, warn};
+use log::{debug, warn};
 use once_cell::sync::Lazy;
 use rust_embed::RustEmbed;
 use serde::Serialize;
+use serde_json::Value;
 use tokio::{
     fs::{read_dir, File},
     io::AsyncReadExt,
     sync::RwLock,
 };
+use utils::{mime_by_ext, mime_by_path, type_by_ext};
 
 use crate::http::{
     HttpHandler, HttpStatus, InterceptorReq, InterceptorRes, Method, Named, Request, Response,
 };
+
+mod utils;
 
 enum FileMatch {
     File(File),
@@ -69,6 +73,7 @@ struct TemplateDirCtx<'a> {
 struct TemplateEntryCtx<'a> {
     is_dir: bool,
     file_name: Cow<'a, str>,
+    file_type: Option<Value>,
 }
 
 pub struct StaticFileHandler {
@@ -136,11 +141,8 @@ impl StaticFileHandler {
         }
 
         let mut response = Response::new(HttpStatus::Ok);
-        let mime = mime_guess::from_path(path)
-            .first_or_text_plain()
-            .to_string();
 
-        response.add_header(("Content-Type", &mime));
+        response.add_header(("Content-Type", &mime_by_path(path)));
         response.add_body(&body);
 
         Ok(response)
@@ -160,10 +162,8 @@ impl StaticFileHandler {
                     .map(|ext| ext.to_str().unwrap())
                     .unwrap();
 
-                let mime = mime_guess::from_ext(ext).first_or_text_plain().to_string();
-
                 let mut response = Response::new(HttpStatus::Ok);
-                response.add_header(("Content-Type", &mime));
+                response.add_header(("Content-Type", &mime_by_ext(ext)));
                 response.add_body(&asset.data);
 
                 return Ok(response);
@@ -195,11 +195,22 @@ impl StaticFileHandler {
         let mut dir_reading = read_dir(absolute_path).await.unwrap();
         let mut files = Vec::new();
         while let Some(entry) = dir_reading.next_entry().await.unwrap() {
-            let file_name = entry.file_name();
-            files.push(TemplateEntryCtx {
-                is_dir: entry.file_type().await.unwrap().is_dir(),
-                file_name: Cow::Owned(file_name.to_string_lossy().into_owned()),
-            });
+            let file_name = entry.file_name().to_string_lossy().into_owned();
+            let is_dir = entry.file_type().await.unwrap().is_dir();
+
+            let file_type = if let Some(ext) = entry.path().extension().and_then(|v| v.to_str()) {
+                Some(type_by_ext(ext).await)
+            } else {
+                None
+            };
+
+            let file = TemplateEntryCtx {
+                is_dir,
+                file_name: Cow::Owned(file_name),
+                file_type,
+            };
+
+            files.push(file);
         }
 
         let context = TemplateDirCtx {
