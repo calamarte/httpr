@@ -1,3 +1,5 @@
+#![allow(dead_code)] // TODO: check alternative is too slow
+
 use once_cell::sync::Lazy;
 use reqwest::header;
 use serde_json::Value;

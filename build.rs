@@ -1,6 +1,12 @@
 use std::env;
+use std::fs;
 
 use dotenvy::dotenv;
+use fs_extra::copy_items;
+use fs_extra::dir;
+use glob::glob;
+use minify_html::minify;
+use minify_html::Cfg;
 
 fn main() {
     dotenv().expect("Load env Variables!");
@@ -8,4 +14,30 @@ fn main() {
     let api_key = env::var("API_KEY").expect("API_KEY not found!");
 
     println!("cargo:rustc-env=EMBEDDED_API_KEY={api_key}");
+
+    minimize_assets();
+
+    println!("cargo:rerun-if-changed=templates/");
+    println!("cargo:rerun-if-changed=assets/");
+}
+
+fn minimize_assets() {
+    let mut options = dir::CopyOptions::new();
+    options.overwrite = true;
+
+    copy_items(&["./assets", "./templates"], "target", &options).unwrap();
+
+    let minify_html_options = Cfg::default();
+    for entry in glob("target/templates/**/*.hbs")
+        .unwrap()
+        .chain(glob("target/assets/**/*.svg").unwrap())
+        .chain(glob("target/assets/**/*.css").unwrap())
+        .chain(glob("target/assets/**/*.js").unwrap())
+    {
+        let path = entry.unwrap();
+        let data = fs::read(&path).unwrap();
+        let minified = minify(&data, &minify_html_options);
+
+        fs::write(path, minified).unwrap();
+    }
 }

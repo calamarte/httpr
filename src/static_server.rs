@@ -42,20 +42,20 @@ const NOT_FOUND_TEMPLATE: &str = "not_found";
 const INTERNAL_ROOT: &str = "/__internal/";
 
 #[derive(RustEmbed)]
-#[folder = "assets/"]
+#[folder = "target/assets/"]
 struct Assets;
 
 static HBS: Lazy<Handlebars<'static>> = Lazy::new(|| {
     let mut hbs = Handlebars::new();
     hbs.register_template_string(
         DIRECTORY_TEMPLATE,
-        include_str!("../templates/directory.hbs"),
+        include_str!("../target/templates/directory.hbs"),
     )
     .unwrap();
 
     hbs.register_template_string(
         NOT_FOUND_TEMPLATE,
-        include_str!("../templates/not_found.hbs"),
+        include_str!("../target/templates/not_found.hbs"),
     )
     .unwrap();
 
@@ -102,7 +102,7 @@ struct TemplateDirCtx<'a> {
 struct TemplateEntryCtx<'a> {
     is_dir: bool,
     file_name: Cow<'a, str>,
-    file_type: Option<Value>,
+    // file_type: Option<Value>, TODO:
 }
 
 impl<'a> Ord for TemplateEntryCtx<'a> {
@@ -242,16 +242,17 @@ impl StaticFileHandler {
             let file_name = entry.file_name().to_string_lossy().into_owned();
             let is_dir = entry.file_type().await.unwrap().is_dir();
 
-            let file_type = if let Some(ext) = entry.path().extension().and_then(|v| v.to_str()) {
-                Some(type_by_ext(ext).await)
-            } else {
-                None
-            };
+            // FIX: type_by_ext is too slow
+            // let file_type = if let Some(ext) = entry.path().extension().and_then(|v| v.to_str()) {
+            //     Some(type_by_ext(ext).await)
+            // } else {
+            //     None
+            // };
 
             let file = TemplateEntryCtx {
                 is_dir,
                 file_name: Cow::Owned(file_name),
-                file_type,
+                // file_type, TODO:
             };
 
             files.push(file);

@@ -40,13 +40,9 @@ main {
 
 .file > a {
   display: contents;
+  color: var(--secondary-color);
 }
 
-.file img {
-  border-radius: 1rem;
-  border: 1px solid var(--secondary-color);
-  object-fit: cover;
-  aspect-ratio: 1;
-  width: 100px;
-  height: 100px;
+.file__name {
+  font-size: 1rem;
 }

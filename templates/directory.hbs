@@ -1,45 +1,54 @@
-<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{dir}}</title>
-    <link href="{{internal}}/style.css" rel="stylesheet">
-    <link rel="apple-touch-icon" sizes="180x180" href="{{internal}}/icons/apple-touch-icon.png">
-    <link rel="icon" type="image/png" sizes="32x32" href="{{internal}}/icons/favicon-32x32.png">
-    <link rel="icon" type="image/png" sizes="16x16" href="{{internal}}/icons/favicon-16x16.png">
+    <link href="{{internal}}/style.css" rel="stylesheet" />
+    <link
+      rel="apple-touch-icon"
+      sizes="180x180"
+      href="{{internal}}/icons/apple-touch-icon.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="{{internal}}/icons/favicon-32x32.png"
+    />
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="16x16"
+      href="{{internal}}/icons/favicon-16x16.png"
+    />
   </head>
   <body>
     <header>
-      <h1> Directory {{dir}}<h1>
+      <h1> Directory {{dir}}</h1>
     </header>
     <main>
       <ul class="files">
-        {{#unless is_root }}
+        {{#unless is_root}}
           <li class="file">
             <a href="..">
-              {{ asset 'icons/opened_folder.svg' }}
+              {{asset "icons/opened_folder.svg"}}
               <h2>..</h2>
             </a>
           </li>
         {{/unless}}
 
         {{#each files}}
-            <li class="file">
-              <a href="{{this.file_name}}">
-                {{#if this.is_dir }}
-                    {{ asset 'icons/folder.svg' }}
-                {{else}}
-                    {{#if this.file_type}}
-                      <img src="{{this.file_type.icons.normal}}"/>
-                    {{else}}
-                      {{ asset 'icons/file.svg' }}
-                    {{/if}}
-                {{/if}}
+          <li class="file">
+            <a href="{{this.file_name}}">
+              {{#if this.is_dir}}
+                {{asset "icons/folder.svg"}}
+              {{else}}
+                {{asset "icons/file.svg"}}
+              {{/if}}
 
-                <h2>{{this.file_name}}</h2>
-              </a>
-            </li>
+              <h2 class="file__name">{{this.file_name}}</h2>
+            </a>
+          </li>
         {{/each}}
       </ul>
     </main>
