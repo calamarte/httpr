@@ -51,4 +51,9 @@ main {
 
 .file__name {
   font-size: 1rem;
+  text-align: center;
+  text-wrap: nowrap;
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }

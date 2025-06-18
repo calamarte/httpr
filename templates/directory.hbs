@@ -38,7 +38,7 @@
         {{/unless}}
 
         {{#each files}}
-          <li class="file">
+          <li class="file" title="{{this.file_name}}">
             <a href="{{this.file_name}}">
               <div class="file__icon_container">
                 {{#if this.is_dir}}
@@ -47,7 +47,6 @@
                   {{icon_by_mime this.mime}}
                 {{/if}}
               </div>
-              {{this.file_type}}
               <h2 class="file__name">{{this.file_name}}</h2>
             </a>
           </li>

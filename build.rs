@@ -19,10 +19,13 @@ fn minimize_assets() {
 
     copy_items(&["./assets", "./templates"], "target", &options).unwrap();
 
-    let minify_html_options = Cfg::default();
-    for entry in glob("target/templates/**/*.hbs")
+    let minify_html_options = Cfg {
+        ..Default::default()
+    };
+
+    // Don't minify *.hbs minify_html have conflicts with {{expr}}
+    for entry in glob("target/assets/**/*.svg")
         .unwrap()
-        .chain(glob("target/assets/**/*.svg").unwrap())
         .chain(glob("target/assets/**/*.css").unwrap())
         .chain(glob("target/assets/**/*.js").unwrap())
     {
