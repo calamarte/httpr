@@ -3,23 +3,23 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{{dir}}</title>
-    <link href="{{internal}}/style.css" rel="stylesheet" />
+    <link href="{{internal_path}}/style.css" rel="stylesheet" />
     <link
       rel="apple-touch-icon"
       sizes="180x180"
-      href="{{internal}}/icons/apple-touch-icon.png"
+      href="{{internal_path}}/icons/apple-touch-icon.png"
     />
     <link
       rel="icon"
       type="image/png"
       sizes="32x32"
-      href="{{internal}}/icons/favicon-32x32.png"
+      href="{{internal_path}}/icons/favicon-32x32.png"
     />
     <link
       rel="icon"
       type="image/png"
       sizes="16x16"
-      href="{{internal}}/icons/favicon-16x16.png"
+      href="{{internal_path}}/icons/favicon-16x16.png"
     />
   </head>
   <body>
@@ -40,12 +40,14 @@
         {{#each files}}
           <li class="file">
             <a href="{{this.file_name}}">
-              {{#if this.is_dir}}
-                {{asset "icons/folder.svg"}}
-              {{else}}
-                {{asset "icons/file.svg"}}
-              {{/if}}
-
+              <div class="file__icon_container">
+                {{#if this.is_dir}}
+                  {{asset "icons/folder.svg"}}
+                {{else}}
+                  {{icon_by_mime this.mime}}
+                {{/if}}
+              </div>
+              {{this.file_type}}
               <h2 class="file__name">{{this.file_name}}</h2>
             </a>
           </li>

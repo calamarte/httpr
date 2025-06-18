@@ -43,6 +43,12 @@ main {
   color: var(--secondary-color);
 }
 
+.file__icon_container {
+  width: 100px;
+  aspect-ratio: 1;
+  object-fit: cover;
+}
+
 .file__name {
   font-size: 1rem;
 }

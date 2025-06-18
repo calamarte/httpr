@@ -7,24 +7,20 @@ use std::{
 };
 
 use async_trait::async_trait;
-use handlebars::{
-    Context, Handlebars, Helper, HelperResult, Output, RenderContext, RenderErrorReason,
-};
+use handlebars::{Assets, DIRECTORY_TEMPLATE, HBS, NOT_FOUND_TEMPLATE};
 use log::{debug, warn};
-use once_cell::sync::Lazy;
-use rust_embed::RustEmbed;
 use serde::Serialize;
-use serde_json::Value;
 use tokio::{
     fs::{read_dir, File},
     io::AsyncReadExt,
 };
-use utils::{mime_by_ext, mime_by_path, type_by_ext};
+use utils::{mime_by_ext, mime_by_path};
 
 use crate::http::{
     HttpHandler, HttpStatus, InterceptorReq, InterceptorRes, Method, Named, Request, Response,
 };
 
+mod handlebars;
 mod utils;
 
 enum FileMatch {
@@ -34,65 +30,12 @@ enum FileMatch {
 }
 
 const ALLOWED_METHODS: [Method; 3] = [Method::Get, Method::Head, Method::Options];
+
 const INDEX_FILE_NAME: &str = "index.html";
-
-const DIRECTORY_TEMPLATE: &str = "directory";
-const NOT_FOUND_TEMPLATE: &str = "not_found";
-
-const INTERNAL_ROOT: &str = "/__internal/";
-
-#[derive(RustEmbed)]
-#[folder = "target/assets/"]
-struct Assets;
-
-static HBS: Lazy<Handlebars<'static>> = Lazy::new(|| {
-    let mut hbs = Handlebars::new();
-    hbs.register_template_string(
-        DIRECTORY_TEMPLATE,
-        include_str!("../target/templates/directory.hbs"),
-    )
-    .unwrap();
-
-    hbs.register_template_string(
-        NOT_FOUND_TEMPLATE,
-        include_str!("../target/templates/not_found.hbs"),
-    )
-    .unwrap();
-
-    hbs.register_helper(
-        "asset",
-        Box::new(
-            |h: &Helper,
-             _: &Handlebars,
-             _: &Context,
-             _: &mut RenderContext,
-             out: &mut dyn Output|
-             -> HelperResult {
-                let param = h
-                    .param(0)
-                    .ok_or(RenderErrorReason::ParamNotFoundForIndex("assets", 0))?;
-
-                if let Some(asset) = Assets::get(
-                    param
-                        .value()
-                        .as_str()
-                        .ok_or(RenderErrorReason::InvalidParamType("Invalid"))?,
-                ) {
-                    let data = str::from_utf8(&asset.data).unwrap();
-                    out.write(data)?;
-                }
-
-                Ok(())
-            },
-        ),
-    );
-
-    hbs
-});
+pub(in crate::static_server) const INTERNAL_ROOT: &str = "/__internal/";
 
 #[derive(Serialize)]
 struct TemplateDirCtx<'a> {
-    internal: &'static str,
     is_root: bool,
     dir: Cow<'a, str>,
     files: Vec<TemplateEntryCtx<'a>>,
@@ -102,7 +45,7 @@ struct TemplateDirCtx<'a> {
 struct TemplateEntryCtx<'a> {
     is_dir: bool,
     file_name: Cow<'a, str>,
-    // file_type: Option<Value>, TODO:
+    mime: Option<String>,
 }
 
 impl<'a> Ord for TemplateEntryCtx<'a> {
@@ -242,17 +185,16 @@ impl StaticFileHandler {
             let file_name = entry.file_name().to_string_lossy().into_owned();
             let is_dir = entry.file_type().await.unwrap().is_dir();
 
-            // FIX: type_by_ext is too slow
-            // let file_type = if let Some(ext) = entry.path().extension().and_then(|v| v.to_str()) {
-            //     Some(type_by_ext(ext).await)
-            // } else {
-            //     None
-            // };
+            let mime = entry
+                .path()
+                .extension()
+                .and_then(|v| v.to_str())
+                .map(mime_by_ext);
 
             let file = TemplateEntryCtx {
                 is_dir,
                 file_name: Cow::Owned(file_name),
-                // file_type, TODO:
+                mime,
             };
 
             files.push(file);
@@ -261,7 +203,6 @@ impl StaticFileHandler {
         files.sort();
 
         let context = TemplateDirCtx {
-            internal: INTERNAL_ROOT,
             is_root: request_path.to_str().unwrap().trim() == "/",
             dir: Cow::Borrowed(request_path.to_str().unwrap()),
             files,

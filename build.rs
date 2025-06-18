@@ -1,7 +1,5 @@
-use std::env;
 use std::fs;
 
-use dotenvy::dotenv;
 use fs_extra::copy_items;
 use fs_extra::dir;
 use glob::glob;
@@ -9,12 +7,6 @@ use minify_html::minify;
 use minify_html::Cfg;
 
 fn main() {
-    dotenv().expect("Load env Variables!");
-
-    let api_key = env::var("API_KEY").expect("API_KEY not found!");
-
-    println!("cargo:rustc-env=EMBEDDED_API_KEY={api_key}");
-
     minimize_assets();
 
     println!("cargo:rerun-if-changed=templates/");
