@@ -1,3 +1,5 @@
+//! Features to build a static server
+
 use core::str;
 use std::{
     borrow::Cow,

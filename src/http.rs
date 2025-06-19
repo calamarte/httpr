@@ -1,3 +1,5 @@
+//! Essential tools to build a http server
+
 use std::any::type_name;
 use std::collections::HashSet;
 use std::fmt;
@@ -183,6 +185,7 @@ impl Request {
         }
     }
 
+    /// Return request method
     pub fn method(&self) -> Method {
         self.method
     }
@@ -191,6 +194,12 @@ impl Request {
         String::from_utf8(self.body.to_vec())
     }
 
+    /// ```
+    /// let mut request = Request::new(Method::Get, String::from("/"), HTTP_VERSION);
+    /// request.
+    ///
+    /// assert_eq!(request.method.url(), request.method());
+    /// ```
     pub fn url(&self) -> Url {
         let host = self.headers.get("host").unwrap();
         Url::parse(&format!("http://{host}{}", self.uri)).unwrap()
