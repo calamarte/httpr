@@ -24,7 +24,11 @@
   </head>
   <body>
     <header>
-      <h1> Directory {{dir}}</h1>
+      <ul class="bread_crums">
+        {{ #each bread_crums }}
+          <li class="bread_crums__crum"><a href="{{this.path}}">{{this.name}}</a></li>
+        {{ /each }}
+      </ul>
     </header>
     <main>
       <ul class="files">

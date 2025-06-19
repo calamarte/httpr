@@ -3,7 +3,7 @@ use std::{
     borrow::Cow,
     collections::HashSet,
     ops::ControlFlow,
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
 };
 
 use async_trait::async_trait;
@@ -38,6 +38,7 @@ pub(in crate::static_server) const INTERNAL_ROOT: &str = "/__internal/";
 struct TemplateDirCtx<'a> {
     is_root: bool,
     dir: Cow<'a, str>,
+    bread_crums: Vec<TemplateBreadCrumCtx>,
     files: Vec<TemplateEntryCtx<'a>>,
 }
 
@@ -46,6 +47,12 @@ struct TemplateEntryCtx<'a> {
     is_dir: bool,
     file_name: Cow<'a, str>,
     mime: Option<String>,
+}
+
+#[derive(Serialize)]
+struct TemplateBreadCrumCtx {
+    name: String,
+    path: PathBuf,
 }
 
 impl<'a> Ord for TemplateEntryCtx<'a> {
@@ -106,6 +113,32 @@ impl StaticFileHandler {
         }
 
         FileMatch::File(File::open(&file_path).await.expect("File access"))
+    }
+
+    fn generate_bread_crum(path: &Path) -> Vec<TemplateBreadCrumCtx> {
+        let mut bread_crums = Vec::new();
+        let mut current_path = PathBuf::new();
+        for component in path.components() {
+            current_path.push(component);
+
+            match component {
+                Component::RootDir => {
+                    bread_crums.push(TemplateBreadCrumCtx {
+                        name: String::from("/"),
+                        path: current_path.clone(),
+                    });
+                }
+                Component::Normal(n) => {
+                    bread_crums.push(TemplateBreadCrumCtx {
+                        name: n.to_string_lossy().to_string(),
+                        path: current_path.clone(),
+                    });
+                }
+                _ => unreachable!("Never here!"),
+            }
+        }
+
+        bread_crums
     }
 
     async fn solve_file_request(&self, request: &Request) -> Result<Response, &'static str> {
@@ -204,6 +237,7 @@ impl StaticFileHandler {
 
         let context = TemplateDirCtx {
             is_root: request_path.to_str().unwrap().trim() == "/",
+            bread_crums: StaticFileHandler::generate_bread_crum(request_path),
             dir: Cow::Borrowed(request_path.to_str().unwrap()),
             files,
         };

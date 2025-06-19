@@ -1,14 +1,13 @@
 :root {
   --secondary-color: grey;
   --bg-color: white;
-
-  background-color: var(--bg-color);
 }
 
 * {
   padding: 0;
   margin: 0;
   box-sizing: border-box;
+  background-color: var(--bg-color);
 }
 
 body {
@@ -17,12 +16,47 @@ body {
 }
 
 header {
+  position: sticky;
+  top: 0;
+  left: 0;
   padding: 1rem 2rem;
   border-bottom: 1px solid var(--secondary-color);
+  background-color: var(--bg-color);
 }
 
 main {
   padding: 2rem;
+}
+
+.bread_crums {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  list-style-type: none;
+  align-items: center;
+}
+
+.bread_crums__crum {
+  font-size: 1.3rem;
+  box-shadow: -2px 2px 54px -11px rgba(0, 0, 0, 0.42);
+}
+
+.bread_crums__crum > a:hover {
+  background-color: var(--secondary-color);
+  color: var(--bg-color);
+}
+
+.bread_crums__crum > a {
+  display: block;
+  border: 1px solud var(--bg-color);
+  border-radius: 5%;
+  padding: 0.5em 1em;
+  color: var(--secondary-color);
+  text-decoration: none;
+
+  transition:
+    color,
+    background-color 0.5s ease-out;
 }
 
 .files {
